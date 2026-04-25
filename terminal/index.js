@@ -4,8 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { exec } = require('child_process');
-const axios = require('axios'); // Needed to talk to the Hub
-const open = require('open'); 
+const axios = require('axios');
+const open = require('open');
+const inquirer = require('inquirer');
 const openApp = open.default || open;
 
 const CONFIG_PATH = path.join(os.homedir(), '.flow_cache.json');
@@ -80,7 +81,9 @@ program
 
     if (data.chrome && data.chrome.urls) {
         console.log('🌐 Opening Chrome...');
-        data.chrome.urls.forEach(url => openApp(url));
+        data.chrome.urls
+            .filter(url => !url.startsWith('chrome://'))
+            .forEach(url => openApp(url));
     }
 
     console.log(`\n📍 Last Directory: ${data.cwd}`);
