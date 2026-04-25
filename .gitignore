@@ -1,4 +1,5 @@
-node_modules/
+vscode/node_modules/
+hub/node_modules/
 .env
 __pycache__/
 .DS_Store
