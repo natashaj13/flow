@@ -3,7 +3,7 @@ import axios from 'axios';
 
 export function activate(context: vscode.ExtensionContext) {
     // This command ID must match the one in your package.json "contributes" section
-    let disposable = vscode.commands.registerCommand('vscode-ext.snapshot', async () => {
+    let disposable = vscode.commands.registerCommand('vscode.snapshot', async () => {
         
         // 1. Get all open text document tabs across all editor groups
         const tabs = vscode.window.tabGroups.all

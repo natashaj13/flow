@@ -4,7 +4,7 @@
   "description": "",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.116.0"
+      "vscode": "^1.109.0"
   },
   "categories": [
     "Other"
@@ -14,8 +14,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscode-ext.snapshot",
-        "title": "Flow: Save Snapshot"
+        "command": "vscode.snapshot",
+        "title": "flow save"
       }
     ]
   },
