@@ -43,7 +43,7 @@ program
 
     // Restore VS Code Files
     if (data.vscode && data.vscode.openFiles) {
-      const files = data.vscode.openFiles.join(' ');
+      const files = data.vscode.openFiles.map(f => `"${f}"`).join(' ');
       exec(`code ${files}`);
     }
 

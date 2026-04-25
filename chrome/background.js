@@ -11,7 +11,7 @@ chrome.action.onClicked.addListener((tab) => {
       body: JSON.stringify({
         type: 'browser',
         data: urls,
-        capsuleName: 'debugging-auth-api' // Hardcode for now to test
+        capsuleName: 'undefined' // Hardcode for now to test
       })
     })
     .then(response => console.log("Hub responded:", response.status))
