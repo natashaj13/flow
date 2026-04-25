@@ -2,38 +2,33 @@ import * as vscode from 'vscode';
 import axios from 'axios';
 
 export function activate(context: vscode.ExtensionContext) {
-    // This command ID must match the one in your package.json "contributes" section
-    let disposable = vscode.commands.registerCommand('vscode.snapshot', async () => {
-        
-        // 1. Get all open text document tabs across all editor groups
+    const HUB_URL = 'http://localhost:3000';
+
+    // Check for the "Save Flag" every 2 seconds
+    setInterval(async () => {
+        try {
+            const res = await axios.get(`${HUB_URL}/check-save`);
+            if (res.data.shouldSave) {
+                await captureAndSubmit();
+            }
+        } catch (e) { /* Hub offline */ }
+    }, 2000);
+
+    async function captureAndSubmit() {
         const tabs = vscode.window.tabGroups.all
-            .flatMap(group => group.tabs)
-            .filter(tab => tab.input instanceof vscode.TabInputText)
-            .map(tab => (tab.input as vscode.TabInputText).uri.fsPath);
-
-        // 2. Get the specific file currently focused
-        const activeFile = vscode.window.activeTextEditor?.document.fileName;
-
-        // 3. Get the workspace root (the project folder)
-        const workspaceDir = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+            .flatMap(g => g.tabs)
+            .filter(t => t.input instanceof vscode.TabInputText)
+            .map(t => (t.input as vscode.TabInputText).uri.fsPath);
 
         const payload = {
-            type: 'vscode',
-            capsuleName: 'debugging-auth-api', // We will make this dynamic later
+            type: 'vscode', // So the Hub knows where to put it in the JSON
             data: {
-                projectRoot: workspaceDir,
-                activeFile: activeFile,
-                openFiles: tabs
+                openFiles: tabs,
+                activeFile: vscode.window.activeTextEditor?.document.fileName
             }
         };
 
-        try {
-            await axios.post('http://localhost:3000/snapshot', payload);
-            vscode.window.showInformationMessage('VS Code Snapshot Saved!');
-        } catch (error) {
-            vscode.window.showErrorMessage('Failed to connect to Flow Hub.');
-        }
-    });
-
-    context.subscriptions.push(disposable);
+        await axios.post(`${HUB_URL}/snapshot`, payload);
+        vscode.window.setStatusBarMessage("✅ Flow: Auto-Saved!", 3000);
+    }
 }
