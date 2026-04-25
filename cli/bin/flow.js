@@ -4,6 +4,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
+const { generateBriefing } = require('./briefing');
 
 program
   .command('save <name>')
@@ -26,7 +27,7 @@ program
 program
   .command('resume <name>')
   .description('Restore a workspace')
-  .action((name) => {
+  .action(async (name) => {
     const capsulePath = path.join(__dirname, `../../shared/capsules/${name}.json`);
     
     if (!fs.existsSync(capsulePath)) {
@@ -35,6 +36,8 @@ program
     }
 
     const data = JSON.parse(fs.readFileSync(capsulePath));
+
+    await generateBriefing(data);
 
     // Restore Browser Tabs
     if (data.browser) {

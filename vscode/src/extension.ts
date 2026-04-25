@@ -30,7 +30,8 @@ export function activate(context: vscode.ExtensionContext) {
             type: 'vscode', // So the Hub knows where to put it in the JSON
             data: {
                 openFiles: tabs,
-                activeFile: vscode.window.activeTextEditor?.document.fileName
+                activeFile: vscode.window.activeTextEditor?.document.fileName,
+                projectRoot: vscode.workspace.workspaceFolders?.[0].uri.fsPath
             }
         };
 
