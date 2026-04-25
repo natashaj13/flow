@@ -1,0 +1,18 @@
+{
+  "name": "flow-cli",
+  "version": "1.0.0",
+  "description": "Save and resume dev context with an AI briefing",
+  "type": "commonjs",
+  "main": "index.js",
+  "bin": {
+    "flow": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "commander": "^12.0.0",
+    "open": "^9.1.0"
+  }
+}

@@ -6,52 +6,106 @@ const app = express();
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.send('Hub is alive and listening on port 3000!');
+    res.send('Hub is alive');
 });
 
+// let activeCapsule = 'default';
+// let shouldSave = false; // The flag
+
+// app.post('/set-active', (req, res) => {
+//     activeCapsule = req.body.name;
+//     console.log(`🎯 Active: ${activeCapsule}`);
+//     res.sendStatus(200);
+// });
+
+// // CLI calls this to raise the flag
+// app.post('/request-save', (req, res) => {
+//     shouldSave = true;
+//     res.sendStatus(200);
+// });
+
+// // Extension calls this every 2 seconds to check the flag
+// app.get('/check-save', (req, res) => {
+//     res.json({ shouldSave: shouldSave });
+// });
+
+// // This endpoint collects data from Chrome or VS Code
+// app.post('/snapshot', (req, res) => {
+//     const { type, data, capsuleName } = req.body;
+//     const filePath = path.join(__dirname, `../shared/capsules/${capsuleName}.json`);
+
+//     // Ensure the shared directory exists
+//     if (!fs.existsSync(path.join(__dirname, '../shared/capsules'))) {
+//         fs.mkdirSync(path.join(__dirname, '../shared/capsules'), { recursive: true });
+//     }
+
+//     // Read existing data or start fresh
+//     let capsule = {};
+//     if (fs.existsSync(filePath)) {
+//         capsule = JSON.parse(fs.readFileSync(filePath));
+//     }
+
+//     // Update the capsule with new data (browser or vscode)
+//     capsule[type] = data;
+//     capsule.lastUpdated = new Date().toISOString();
+
+//     fs.writeFileSync(filePath, JSON.stringify(capsule, null, 2));
+//     console.log(`Saved ${type} data to ${capsuleName}`);
+//     shouldSave = false; // Reset the flag after saving
+//     res.sendStatus(200);
+// });
+
+
 let activeCapsule = 'default';
-let shouldSave = false; // The flag
+let checklist = { vscode: false, browser: false }
+let lastSaveId = null; // Use a timestamp to prevent double-saves
 
 app.post('/set-active', (req, res) => {
     activeCapsule = req.body.name;
-    console.log(`🎯 Active: ${activeCapsule}`);
+    checklist = { vscode: false, browser: false };    
+    lastSaveId = Date.now(); // Create a unique ID for this specific save command
+    console.log(`🎯 Active Capsule: ${activeCapsule} (ID: ${lastSaveId})`);
     res.sendStatus(200);
 });
 
-// CLI calls this to raise the flag
-app.post('/request-save', (req, res) => {
-    shouldSave = true;
-    res.sendStatus(200);
-});
-
-// Extension calls this every 2 seconds to check the flag
 app.get('/check-save', (req, res) => {
-    res.json({ shouldSave: shouldSave });
+    const shouldSave = !checklist.vscode || !checklist.browser;
+
+    res.json({ 
+        shouldSave: shouldSave, 
+        name: activeCapsule,
+        saveId: lastSaveId 
+    });
 });
 
-// This endpoint collects data from Chrome or VS Code
 app.post('/snapshot', (req, res) => {
-    const { type, data, capsuleName } = req.body;
-    const filePath = path.join(__dirname, `../shared/capsules/${capsuleName}.json`);
-
-    // Ensure the shared directory exists
-    if (!fs.existsSync(path.join(__dirname, '../shared/capsules'))) {
-        fs.mkdirSync(path.join(__dirname, '../shared/capsules'), { recursive: true });
+    const { type, data } = req.body;
+    
+    // 1. Guard against undefined names
+    if (!activeCapsule || activeCapsule === 'undefined') {
+        console.error("❌ Rejected: No active capsule name set.");
+        return res.sendStatus(400);
     }
 
-    // Read existing data or start fresh
-    let capsule = {};
-    if (fs.existsSync(filePath)) {
-        capsule = JSON.parse(fs.readFileSync(filePath));
-    }
+    const filePath = path.join(__dirname, `../shared/capsules/${activeCapsule}.json`);
 
-    // Update the capsule with new data (browser or vscode)
+    // 2. Standard Save Logic
+    let capsule = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath)) : {};
     capsule[type] = data;
     capsule.lastUpdated = new Date().toISOString();
-
     fs.writeFileSync(filePath, JSON.stringify(capsule, null, 2));
-    console.log(`Saved ${type} data to ${capsuleName}`);
-    shouldSave = false; // Reset the flag after saving
+    
+    console.log(`✅ Saved ${type} data to ${activeCapsule}`);
+
+    // 3. The "Lower the Flag" Logic
+    // We only turn off the signal once VS Code has reported in
+    if (checklist.hasOwnProperty(type)) {
+        checklist[type] = true;
+        console.log(`✅ [${type}] reported in.`);
+    }
+    if (checklist.vscode && checklist.browser) {
+        console.log(`🏁 Both synced for ${activeCapsule}. Cycle complete.`);
+    }
     res.sendStatus(200);
 });
 

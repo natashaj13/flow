@@ -2,13 +2,19 @@ import * as vscode from 'vscode';
 import axios from 'axios';
 
 export function activate(context: vscode.ExtensionContext) {
-    const HUB_URL = 'http://localhost:3000';
+    console.log("🚀 FLOW EXTENSION IS STARTING..."); // Add this
+    
+    const HUB_URL = 'http://127.0.0.1:3000';
+    let lastProcessedId: number | null = null; // Track what we've already saved
 
-    // Check for the "Save Flag" every 2 seconds
     setInterval(async () => {
         try {
             const res = await axios.get(`${HUB_URL}/check-save`);
-            if (res.data.shouldSave) {
+            const { shouldSave, saveId } = res.data;
+
+            // Only trigger if the flag is UP and this is a NEW save request
+            if (shouldSave && saveId !== lastProcessedId) {
+                lastProcessedId = saveId;
                 await captureAndSubmit();
             }
         } catch (e) { /* Hub offline */ }
