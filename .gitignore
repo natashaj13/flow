@@ -1,6 +1,26 @@
-vscode/node_modules/
-hub/node_modules/
-.env
-__pycache__/
+# --- General ---
+node_modules/
 .DS_Store
+*.log
 dist/
+out/
+
+# --- Shared Data (The Capsules) ---
+# We ignore the actual saved snapshots so you don't commit 
+# your personal tabs/file paths to GitHub.
+shared/capsules/*.json
+
+# --- VS Code Extension ---
+vscode-ext/.vscode-test/
+vscode-ext/vsc-extension-quickstart.md
+vscode-ext/bundle.js
+*.vsix
+
+# --- Hub & CLI ---
+hub/.env
+cli/.env
+
+# --- Local Environment & Build ---
+.npm/
+.eslintcache
+package-lock.json
