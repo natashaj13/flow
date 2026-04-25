@@ -94,7 +94,7 @@ Do not pad with pleasantries.
 ${context}
 --- END ---`;
 
-    process.stdout.write('\n--- AI Briefing ---\n\n');
+    process.stdout.write('\n\n');
 
     const result = await model.generateContentStream(prompt);
 
@@ -102,7 +102,7 @@ ${context}
         process.stdout.write(chunk.text());
     }
 
-    process.stdout.write('\n\n-------------------\n');
+    process.stdout.write('\n\n');
 }
 
 module.exports = { generateBriefing };
