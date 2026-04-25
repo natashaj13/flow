@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
-const path = require('path');
 const { execSync } = require('child_process');
 
 /**
@@ -17,7 +19,10 @@ function buildContext(capsule) {
     const parts = [];
 
     if (capsule.vscode) {
-        const { activeFile, openFiles, projectRoot } = capsule.vscode;
+        // Support both old schema (activeFile/openFiles/projectRoot) and new schema (files)
+        const activeFile = capsule.vscode.activeFile || (capsule.vscode.files && capsule.vscode.files[0]);
+        const openFiles = capsule.vscode.openFiles || capsule.vscode.files || [];
+        const projectRoot = capsule.vscode.projectRoot || capsule.cwd;
 
         if (activeFile) {
             parts.push(`Active file: ${path.basename(activeFile)}`);
@@ -29,9 +34,9 @@ function buildContext(capsule) {
             }
         }
 
-        if (openFiles && openFiles.length > 0) {
+        if (openFiles.length > 0) {
             const names = openFiles.slice(0, 5).map(f => path.basename(f)).join(', ');
-            parts.push(`\nOther open files: ${names}`);
+            parts.push(`\nOpen files: ${names}`);
         }
 
         if (projectRoot && fs.existsSync(projectRoot)) {
@@ -55,13 +60,20 @@ function buildContext(capsule) {
         }
     }
 
-    if (capsule.browser && capsule.browser.length > 0) {
-        const tabs = capsule.browser.slice(0, 5).join('\n  - ');
+    // Support both old schema (browser[]) and new schema (chrome.urls[])
+    const browserTabs = capsule.browser || (capsule.chrome && capsule.chrome.urls) || [];
+    if (browserTabs.length > 0) {
+        const tabs = browserTabs.slice(0, 5).join('\n  - ');
         parts.push(`\nBrowser tabs open:\n  - ${tabs}`);
     }
 
-    if (capsule.lastUpdated) {
-        parts.push(`\nSnapshot taken: ${new Date(capsule.lastUpdated).toLocaleString()}`);
+    const snapshotTime = capsule.lastUpdated || capsule.timestamp;
+    if (snapshotTime) {
+        parts.push(`\nSnapshot taken: ${snapshotTime}`);
+    }
+
+    if (capsule.cwd) {
+        parts.push(`\nWorking directory: ${capsule.cwd}`);
     }
 
     return parts.join('\n');

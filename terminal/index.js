@@ -7,6 +7,7 @@ const { exec } = require('child_process');
 const axios = require('axios');
 const open = require('open');
 const inquirer = require('inquirer');
+const { generateBriefing } = require('../cli/briefing');
 const openApp = open.default || open;
 
 const CONFIG_PATH = path.join(os.homedir(), '.flow_cache.json');
@@ -73,7 +74,10 @@ program
     const data = answer.flowData;
     console.log(`\n🌊 Flowing back into: ${data.timestamp}...`);
 
-    // 5. Execution Logic
+    // 5. AI Briefing
+    await generateBriefing(data);
+
+    // 6. Execution Logic
     if (data.vscode && data.vscode.files) {
         console.log('🖥️  Opening VS Code...');
         data.vscode.files.forEach(file => exec(`code "${file}"`));
