@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "body-parser": "^2.2.2",
+    "chrome-remote-interface": "^0.34.0",
     "express": "^5.2.1"
   }
 }
