@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Flow Capsule",
+  "version": "1.0",
+  "description": "Snapshot browser tabs for Flow.",
+  "permissions": ["tabs"],
+  "host_permissions": ["http://localhost:3000/*"],
+  "action": {
+    "default_title": "Snapshot Tabs"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
