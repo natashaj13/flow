@@ -105,4 +105,39 @@ ${context}
     process.stdout.write('\n\n');
 }
 
-module.exports = { generateBriefing };
+async function filterRelevantTabs(capsule, filePath) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || !capsule.browser || !capsule.vscode) return;
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+
+    const { activeFile, openFiles, projectRoot } = capsule.vscode;
+    const prompt = `You are a developer tool. Given the VS Code context and a list of browser tabs, return ONLY a JSON array of the tab URLs that are relevant to the project being worked on. No explanation, no markdown — just the raw JSON array.
+
+VS Code context:
+- Project root: ${projectRoot}
+- Active file: ${activeFile}
+- Open files: ${(openFiles || []).join(', ')}
+
+Browser tabs:
+${capsule.browser.map((t, i) => {
+    const url = t.url || t;
+    const title = t.title ? ` — "${t.title}"` : '';
+    return `${i + 1}. ${url}${title}`;
+}).join('\n')}`;
+
+    try {
+        const result = await model.generateContent(prompt);
+        const text = result.response.text().trim().replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+        const relevant = JSON.parse(text);
+        // Store only URLs so flow load can open them directly
+        capsule.relevantBrowser = relevant.map(t => t.url || t);
+        fs.writeFileSync(filePath, JSON.stringify(capsule, null, 2));
+        console.log(`🔍 Filtered to ${relevant.length} relevant tab(s).`);
+    } catch (err) {
+        console.error('⚠️  Tab filtering failed:', err.message);
+    }
+}
+
+module.exports = { generateBriefing, filterRelevantTabs };
