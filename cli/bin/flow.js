@@ -52,4 +52,27 @@ program
 
   });
 
+program
+    .command('list')
+    .description('List all saved capsules')
+    .action(() => {
+        const capsules = path.join(__dirname, `../../shared/capsules/`);
+        if (!fs.existsSync(capsules)) {
+            console.log('No capsules saved yet.');
+            return;
+        }
+        const files = fs.readdirSync(capsules).filter(f => f.endsWith('.json'));
+        if (files.length === 0) {
+            console.log('No capsules saved yet.');
+            return;
+        }
+        files.forEach(f => {
+            const data = JSON.parse(fs.readFileSync(path.join(capsules, f), 'utf8'));
+            const updated = data.lastUpdated
+                ? new Date(data.lastUpdated).toLocaleString()
+                : 'unknown';
+            console.log(`  ${f.replace('.json', '')}  (last saved: ${updated})`);
+        });
+    });
+
 program.parse(process.argv);
