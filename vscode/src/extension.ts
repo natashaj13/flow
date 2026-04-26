@@ -8,6 +8,8 @@ export function activate(context: vscode.ExtensionContext) {
     let lastProcessedId: number | null = null; // Track what we've already saved
 
     setInterval(async () => {
+        if (!vscode.window.state.focused) return;
+        
         try {
             const res = await axios.get(`${HUB_URL}/check-save`);
             const { shouldSave, saveId } = res.data;
