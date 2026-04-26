@@ -4,8 +4,6 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
-const open = require('open');
-const openApp = open.default || open;
 const { generateBriefing } = require('./briefing');
 
 program
@@ -44,7 +42,7 @@ program
     // Restore relevant tabs if available, otherwise fall back to all tabs
     const tabs = data.relevantBrowser || data.browser;
     if (tabs) {
-      tabs.forEach(url => openApp(url));
+      tabs.forEach(url => exec(`open "${url}"`));
     }
 
     // Restore VS Code Files
