@@ -28,14 +28,14 @@ async function checkHub() {
 
 async function captureAndSubmit() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
-  const urls = tabs.map(t => t.url);
+  const data = tabs.map(t => ({ url: t.url, title: t.title }));
 
   await fetch(`${HUB_URL}/snapshot`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       type: 'browser',
-      data: urls
+      data
     })
   });
   console.log("✅ Browser synced.");
