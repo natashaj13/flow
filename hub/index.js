@@ -60,7 +60,7 @@ app.post('/snapshot', (req, res) => {
     if (checklist.vscode && checklist.browser) {
         console.log(`🏁 Both synced for ${activeCapsule}. Cycle complete.`);
         const updatedCapsule = JSON.parse(fs.readFileSync(filePath));
-        filterRelevantTabs(updatedCapsule, filePath);
+        //filterRelevantTabs(updatedCapsule, filePath);
     }
     res.sendStatus(200);
 });
