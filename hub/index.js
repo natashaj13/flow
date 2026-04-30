@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { filterRelevantTabs } = require('../cli/bin/briefing');
 const app = express();
+const os = require('os');
+
 
 app.use(express.json());
 
@@ -41,7 +43,7 @@ app.post('/snapshot', (req, res) => {
         return res.sendStatus(400);
     }
 
-    const filePath = path.join(__dirname, `../shared/capsules/${activeCapsule}.json`);
+    const filePath = path.join(os.homedir(), `.flow_capsules/${activeCapsule}.json`);
 
     // 2. Standard Save Logic
     let capsule = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath)) : {};
@@ -60,7 +62,7 @@ app.post('/snapshot', (req, res) => {
     if (checklist.vscode && checklist.browser) {
         console.log(`🏁 Both synced for ${activeCapsule}. Cycle complete.`);
         const updatedCapsule = JSON.parse(fs.readFileSync(filePath));
-        filterRelevantTabs(updatedCapsule, filePath);
+        //filterRelevantTabs(updatedCapsule, filePath);
     }
     res.sendStatus(200);
 });

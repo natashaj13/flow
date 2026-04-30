@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const { generateBriefing } = require('./briefing');
+const os = require('os');
 
 program
   .command('save <name>')
@@ -28,7 +29,7 @@ program
   .command('load <name>')
   .description('Restore a workspace')
   .action(async (name) => {
-    const capsulePath = path.join(__dirname, `../../shared/capsules/${name}.json`);
+    const capsulePath = path.join(os.homedir(), `.flow_capsules/${name}.json`);
     
     if (!fs.existsSync(capsulePath)) {
       console.error("Capsule not found!");
@@ -37,7 +38,7 @@ program
 
     const data = JSON.parse(fs.readFileSync(capsulePath));
 
-    await generateBriefing(data);
+    //await generateBriefing(data);
 
     // Restore Browser Tabs
     if (data.browser) {
@@ -56,7 +57,7 @@ program
     .command('list')
     .description('List all saved capsules')
     .action(() => {
-        const capsules = path.join(__dirname, `../../shared/capsules/`);
+        const capsules = path.join(os.homedir(), `.flow_capsules/`);
         if (!fs.existsSync(capsules)) {
             console.log('No capsules saved yet.');
             return;
