@@ -47,8 +47,25 @@ program
 
     // Restore VS Code Files
     if (data.vscode && data.vscode.openFiles) {
-      const files = data.vscode.openFiles.map(f => `"${f}"`).join(' ');
-      exec(`code -n ${files}`);
+      // const files = data.vscode.openFiles.map(f => `"${f}"`).join(' ');
+      // exec(`code -n ${files}`);
+      const { projectRoot, openFiles } = data.vscode;
+        
+      let command = 'code -n'; // -n for new window
+
+        // Add the folder (Sidebar)
+      if (projectRoot) {
+          command += ` "${projectRoot}"`;
+      }
+
+        // Add the specific files (Tabs)
+      if (openFiles && openFiles.length > 0) {
+          const files = openFiles.map(f => `"${f}"`).join(' ');
+          command += ` ${files}`;
+      }
+
+      console.log(`🖥️  Restoring Workspace: ${projectRoot || 'Files only'}`);
+      exec(command);
     }
 
   });
