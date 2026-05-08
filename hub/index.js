@@ -2,11 +2,14 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { filterRelevantTabs } = require('../cli/bin/briefing');
-const app = express();
 const os = require('os');
+const cors = require('cors');
+const app = express();
 
-
+app.use(cors());
 app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
     res.send('Hub is alive');
@@ -67,4 +70,8 @@ app.post('/snapshot', (req, res) => {
     res.sendStatus(200);
 });
 
-app.listen(3000, () => console.log('Hub running on http://localhost:3000'));
+//app.listen(3000, () => console.log('Hub running on http://localhost:3000'));
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Flow Hub is live on port ${PORT}`);
+});
