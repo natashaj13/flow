@@ -4,7 +4,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
-const { generateBriefing } = require('./briefing');
+const { generateBriefing } = require('../../hub/briefing');
 const os = require('os');
 
 program

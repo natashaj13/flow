@@ -1,7 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { filterRelevantTabs } = require('../cli/bin/briefing');
+const { filterRelevantTabs } = require('./briefing');
 const os = require('os');
 const cors = require('cors');
 const app = express();
