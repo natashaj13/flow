@@ -1,0 +1,16 @@
+{
+  "name": "flow-cli",
+  "version": "1.0.0",
+  "description": "CLI for the Flow workspace manager",
+  "main": "bin/flow.js",
+  "bin": {
+    "flow": "./bin/flow.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "axios": "^1.15.2",
+    "commander": "^14.0.3",
+    "inquirer": "^8.2.7",
+    "open": "^11.0.0"
+  }
+}
