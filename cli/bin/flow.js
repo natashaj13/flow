@@ -1,92 +1,106 @@
 #!/usr/bin/env node
-'use strict';
-
 const { program } = require('commander');
+const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-
-const CAPSULES_DIR = path.join(__dirname, '../../shared/capsules');
-
-program
-  .name('flow')
-  .description('Save and resume your dev context')
-  .version('1.0.0');
+const { exec } = require('child_process');
+const { generateBriefing } = require('./briefing');
 
 program
-  .command('resume <name>')
-  .description('Restore a saved workspace')
-  .option('--describe', 'List saved VS Code files and Chrome tabs without resuming')
-  .action((name, opts) => {
-    const capsulePath = path.join(CAPSULES_DIR, `${name}.json`);
+  .command('save <name>')
+  .description('Snapshot the current workspace')
+  .action(async (name) => {
+    console.log(`Saving workspace ${name}`);
+    try {
+      // 1. Set the active name
+      await axios.post('http://localhost:3000/set-active', { name });
+      
+      // 2. Set the "Save Flag" (This wakes up the extension)
+      await axios.post('http://localhost:3000/request-save'); 
+      
+      //console.log(`✅ Signal sent! VS Code should save automatically in a second.`);
+    } catch (err) {
+      //console.error("Hub not found. Is 'node hub/index.js' running on port 3000?");
+    }
+  });
+
+program
+  .command('load <name>')
+  .description('Restore a workspace')
+  .option('--describe', 'List saved VS Code files and Chrome tabs without reopening anything')
+  .action(async (name, opts) => {
+    const capsulePath = path.join(__dirname, `../../shared/capsules/${name}.json`);
 
     if (!fs.existsSync(capsulePath)) {
-      console.error(`No capsule found for "${name}" at ${capsulePath}`);
-      process.exit(1);
+      console.error("Capsule not found!");
+      return;
     }
 
-    const capsule = JSON.parse(fs.readFileSync(capsulePath, 'utf8'));
+    const data = JSON.parse(fs.readFileSync(capsulePath));
 
     if (opts.describe) {
-      const saved = capsule.lastUpdated
-        ? new Date(capsule.lastUpdated).toLocaleString()
+      const saved = data.lastUpdated
+        ? new Date(data.lastUpdated).toLocaleString()
         : 'unknown';
       console.log(`\nCapsule: ${name}  (saved: ${saved})\n`);
 
-      // VS Code files
-      const openFiles =
-        capsule.vscode?.openFiles ||
-        capsule.vscode?.files ||
-        [];
-
+      const openFiles = data.vscode?.openFiles || [];
+      console.log('VS Code files:');
       if (openFiles.length > 0) {
-        console.log('VS Code files:');
         openFiles.forEach(f => console.log(`  ${f}`));
       } else {
-        console.log('VS Code files:  (none saved)');
+        console.log('  (none saved)');
       }
 
       console.log('');
-
-      // Chrome tabs
-      const rawBrowser = capsule.browser || capsule.chrome;
-      const tabs = Array.isArray(rawBrowser)
-        ? rawBrowser
-        : (rawBrowser?.urls ?? []);
-
+      console.log('Chrome tabs:');
+      const tabs = Array.isArray(data.browser) ? data.browser : [];
       if (tabs.length > 0) {
-        console.log('Chrome tabs:');
-        tabs.forEach(t => console.log(`  ${t}`));
+        tabs.forEach(t => console.log(`  ${t.url || t}`));
       } else {
-        console.log('Chrome tabs:  (none saved)');
+        console.log('  (none saved)');
       }
-
       console.log('');
       return;
     }
 
-    // Normal resume — reopen files and tabs
-    const { exec } = require('child_process');
+    //GEMINI BRIEFING HERE
+    //await generateBriefing(data);
 
-    const openFiles =
-      capsule.vscode?.openFiles ||
-      capsule.vscode?.files ||
-      [];
-
-    if (openFiles.length) {
-      console.log('Reopening VS Code...');
-      const files = openFiles.map(f => `"${f}"`).join(' ');
-      exec(`code ${files}`);
+    // Restore Browser Tabs
+    if (data.browser) {
+      data.browser.forEach(url => exec(`open "${url}"`));
     }
 
-    const rawBrowser = capsule.browser || capsule.chrome;
-    const tabs = Array.isArray(rawBrowser)
-      ? rawBrowser
-      : (rawBrowser?.urls ?? []);
-
-    if (tabs.length) {
-      console.log('Reopening browser tabs...');
-      tabs.forEach(url => exec(`open "${url}"`));
+    // Restore VS Code Files
+    if (data.vscode && data.vscode.openFiles) {
+      const files = data.vscode.openFiles.map(f => `"${f}"`).join(' ');
+      exec(`code -n ${files}`);
     }
+
   });
+
+program
+    .command('list')
+    .description('List all saved capsules')
+    .action(() => {
+        const capsules = path.join(__dirname, `../../shared/capsules/`);
+        if (!fs.existsSync(capsules)) {
+            console.log('No capsules saved yet.');
+            return;
+        }
+        const files = fs.readdirSync(capsules).filter(f => f.endsWith('.json'));
+        if (files.length === 0) {
+            console.log('No capsules saved yet.');
+            return;
+        }
+        files.forEach(f => {
+            const data = JSON.parse(fs.readFileSync(path.join(capsules, f), 'utf8'));
+            const updated = data.lastUpdated
+                ? new Date(data.lastUpdated).toLocaleString()
+                : 'unknown';
+            console.log(`  ${f.replace('.json', '')}  (last saved: ${updated})`);
+        });
+    });
 
 program.parse(process.argv);
