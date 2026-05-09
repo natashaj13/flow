@@ -1,32 +1,40 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { filterRelevantTabs } = require('../cli/bin/briefing');
-const app = express();
 const os = require('os');
-
+const app = express();
 
 app.use(express.json());
+
+// Path to store your capsules in the user's home directory
+const CAPSULE_DIR = path.join(os.homedir(), '.flow_capsules');
+
+// Ensure the directory exists when the server starts
+if (!fs.existsSync(CAPSULE_DIR)) {
+    fs.mkdirSync(CAPSULE_DIR, { recursive: true });
+}
+
+let activeCapsule = 'default';
+let checklist = { vscode: false, browser: false };
+let lastSaveId = null;
+let shouldSave = false;
 
 app.get('/', (req, res) => {
     res.send('Hub is alive');
 });
 
-let activeCapsule = 'default';
-let checklist = { vscode: false, browser: false }
-let lastSaveId = null; // Use a timestamp to prevent double-saves
-
 app.post('/set-active', (req, res) => {
     activeCapsule = req.body.name;
     checklist = { vscode: false, browser: false };    
-    lastSaveId = Date.now(); // Create a unique ID for this specific save command
+    lastSaveId = Date.now();
+    shouldSave = true; 
     console.log(`Active Capsule: ${activeCapsule} (ID: ${lastSaveId})`);
     res.sendStatus(200);
 });
 
 app.get('/check-save', (req, res) => {
-    const shouldSave = !checklist.vscode || !checklist.browser;
-
+    // FIX: Removed the 'const' that was re-declaring shouldSave locally
+    // We want to return the global state
     res.json({ 
         shouldSave: shouldSave, 
         name: activeCapsule,
@@ -37,32 +45,35 @@ app.get('/check-save', (req, res) => {
 app.post('/snapshot', (req, res) => {
     const { type, data } = req.body;
     
-    // 1. Guard against undefined names
     if (!activeCapsule || activeCapsule === 'undefined') {
         console.error("❌ Rejected: No active capsule name set.");
         return res.sendStatus(400);
     }
 
-    const filePath = path.join(os.homedir(), `.flow_capsules/${activeCapsule}.json`);
+    const filePath = path.join(CAPSULE_DIR, `${activeCapsule}.json`);
 
-    // 2. Standard Save Logic
+    // FIX: Changed 'capsulePath' to 'filePath' (it was crashing here before)
+    if (!fs.existsSync(path.dirname(filePath))) {
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    }
+
+    // Load existing or create new
     let capsule = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath)) : {};
+    
     capsule[type] = data;
     capsule.lastUpdated = new Date().toISOString();
-    fs.writeFileSync(filePath, JSON.stringify(capsule, null, 2));
     
+    fs.writeFileSync(filePath, JSON.stringify(capsule, null, 2));
     console.log(`✅ Saved ${type} data to ${activeCapsule}`);
 
-    // 3. The "Lower the Flag" Logic
-    // We only turn off the signal once VS Code has reported in
     if (checklist.hasOwnProperty(type)) {
         checklist[type] = true;
         console.log(`✅ [${type}] reported in.`);
     }
+
     if (checklist.vscode && checklist.browser) {
         console.log(`🏁 Both synced for ${activeCapsule}. Cycle complete.`);
-        const updatedCapsule = JSON.parse(fs.readFileSync(filePath));
-        //filterRelevantTabs(updatedCapsule, filePath);
+        shouldSave = false; // Lower the flag now that we are done
     }
     res.sendStatus(200);
 });

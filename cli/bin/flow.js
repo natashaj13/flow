@@ -6,22 +6,57 @@ const path = require('path');
 const { exec } = require('child_process');
 const { generateBriefing } = require('./briefing');
 const os = require('os');
+const pm2 = require('pm2');
+
+async function ensureHubIsRunning() {
+  return new Promise((resolve, reject) => {
+    pm2.connect((err) => {
+      if (err) {
+        console.error("Could not connect to PM2 manager");
+        process.exit(2);
+      }
+
+      // Check if the process 'flow-hub' is already running
+      pm2.describe('flow-hub', (err, processDescription) => {
+        if (err || processDescription.length === 0 || processDescription[0].pm2_env.status !== 'online') {
+          console.log("Starting Flow Hub in background...");
+          
+          // Start the hub (point this to your hub's index.js)
+          const hubPath = path.join(__dirname, '../../hub/index.js');
+          
+          pm2.start({
+            script: hubPath,
+            name: 'flow-hub',
+            autorestart: true, // Re-wakes if it crashes
+            watch: false      // Don't watch files in production
+          }, (err, apps) => {
+            pm2.disconnect();   // Disconnect from PM2 after starting
+            if (err) reject(err);
+            resolve();
+          });
+        } else {
+          // Already running!
+          pm2.disconnect();
+          resolve();
+        }
+      });
+    });
+  });
+}
 
 program
   .command('save <name>')
   .description('Snapshot the current workspace')
   .action(async (name) => {
+    await ensureHubIsRunning();
     console.log(`Saving workspace ${name}`);
     try {
-      // 1. Set the active name
+      // 1. Set the active name and save flag
       await axios.post('http://localhost:3000/set-active', { name });
-      
-      // 2. Set the "Save Flag" (This wakes up the extension)
-      await axios.post('http://localhost:3000/request-save'); 
       
       //console.log(`✅ Signal sent! VS Code should save automatically in a second.`);
     } catch (err) {
-      //console.error("Hub not found. Is 'node hub/index.js' running on port 3000?");
+      console.error(err);
     }
   });
 
@@ -42,7 +77,7 @@ program
 
     // Restore Browser Tabs
     if (data.browser) {
-      data.browser.forEach(url => exec(`open "${url}"`));
+      data.browser.forEach(tab => exec(`open "${tab.url}"`));
     }
 
     // Restore VS Code Files
@@ -64,7 +99,7 @@ program
           command += ` ${files}`;
       }
 
-      console.log(`🖥️  Restoring Workspace: ${projectRoot || 'Files only'}`);
+      console.log(`Restoring Workspace: ${projectRoot || 'Files only'}`);
       exec(command);
     }
 
