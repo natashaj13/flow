@@ -14,10 +14,10 @@ program
     console.log(`Saving workspace ${name}`);
     try {
       // 1. Set the active name
-      await axios.post('http://localhost:3000/set-active', { name });
+      await axios.post('https://flow-7af9.onrender.com/set-active', { name });
       
       // 2. Set the "Save Flag" (This wakes up the extension)
-      await axios.post('http://localhost:3000/request-save'); 
+      //await axios.post('https://flow-7af9.onrender.com/request-save'); 
       
       //console.log(`✅ Signal sent! VS Code should save automatically in a second.`);
     } catch (err) {

@@ -1,4 +1,4 @@
-const HUB_URL = 'http://localhost:3000';
+const HUB_URL = 'https://flow-7af9.onrender.com';
 
 // 1. Create an alarm to wake up the service worker every minute
 chrome.alarms.create('keep-alive-poll', { periodInMinutes: 1 });
@@ -17,7 +17,7 @@ setInterval(checkHub, 2000);
 let lastId = null;
 
 async function checkHub() {
-  const res = await fetch('http://localhost:3000/check-save');
+  const res = await fetch(`${HUB_URL}/check-save`);
   const { shouldSave, saveId } = await res.json();
   
   if (shouldSave && saveId !== lastId) {

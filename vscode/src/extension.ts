@@ -4,7 +4,7 @@ import axios from 'axios';
 export function activate(context: vscode.ExtensionContext) {
     console.log("🚀 FLOW EXTENSION IS STARTING..."); // Add this
     
-    const HUB_URL = 'http://127.0.0.1:3000';
+    const HUB_URL = 'https://flow-7af9.onrender.com';
     let lastProcessedId: number | null = null; // Track what we've already saved
 
     setInterval(async () => {

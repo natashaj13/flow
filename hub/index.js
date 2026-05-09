@@ -18,12 +18,14 @@ app.get('/', (req, res) => {
 let activeCapsule = 'default';
 let checklist = { vscode: false, browser: false }
 let lastSaveId = null; // Use a timestamp to prevent double-saves
+let shouldSave = false; // This flag indicates whether a save is currently requested
 
 app.post('/set-active', (req, res) => {
     activeCapsule = req.body.name;
     checklist = { vscode: false, browser: false };    
     lastSaveId = Date.now(); // Create a unique ID for this specific save command
     console.log(`Active Capsule: ${activeCapsule} (ID: ${lastSaveId})`);
+    shouldSave = true; 
     res.sendStatus(200);
 });
 
