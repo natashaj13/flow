@@ -78,4 +78,12 @@ app.post('/snapshot', (req, res) => {
     res.sendStatus(200);
 });
 
-app.listen(3000, () => console.log('Hub running on http://localhost:3000'));
+const PORT_FILE = path.join(os.homedir(), '.flow_port');
+
+const PORT = process.env.PORT || 7382;
+
+app.listen(PORT, () => {
+    // Write the port to the system so CLI and VS Code can see it
+    fs.writeFileSync(PORT_FILE, PORT.toString());
+    console.log(`Hub locked to port ${PORT}`);
+});

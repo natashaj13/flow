@@ -1,12 +1,29 @@
 import * as vscode from 'vscode';
-import axios from 'axios';
+import axios, { get } from 'axios';
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
+
+let cachedPort: string | null = null;
+
+function getHubUrl() {
+    if (cachedPort) return `http://localhost:${cachedPort}`;
+
+    const portFile = path.join(os.homedir(), '.flow_port');
+    console.log(`Looking for Hub port file at: ${portFile}`);
+    if (fs.existsSync(portFile)) {
+        cachedPort = fs.readFileSync(portFile, 'utf8').trim();
+        return `http://localhost:${cachedPort}`;
+    }
+    return 'http://localhost:7382'; // Default
+}
 
 export function activate(context: vscode.ExtensionContext) {
     console.log("🚀 FLOW EXTENSION IS STARTING..."); // Add this
     
-    const HUB_URL = 'http://127.0.0.1:3000';
+    const HUB_URL = getHubUrl();
     let lastProcessedId: number | null = null; // Track what we've already saved
-
+    console.log(`Using Hub URL: ${HUB_URL}`); // Add this
     setInterval(async () => {
         if (!vscode.window.state.focused) return;
         

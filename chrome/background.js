@@ -1,4 +1,5 @@
-const HUB_URL = 'http://localhost:3000';
+let CURRENT_PORT = '7382'; // Start with default
+let HUB_URL = `http://localhost:${CURRENT_PORT}`;
 
 // 1. Create an alarm to wake up the service worker every minute
 chrome.alarms.create('keep-alive-poll', { periodInMinutes: 1 });
@@ -17,12 +18,34 @@ setInterval(checkHub, 2000);
 let lastId = null;
 
 async function checkHub() {
-  const res = await fetch('http://localhost:3000/check-save');
-  const { shouldSave, saveId } = await res.json();
-  
-  if (shouldSave && saveId !== lastId) {
-    lastId = saveId;
-    captureAndSubmit();
+  try {
+    const res = await fetch(`${HUB_URL}/check-save`);
+    if (!res.ok) throw new Error();
+
+    const { shouldSave, saveId } = await res.json();
+    
+    if (shouldSave && saveId !== lastId) {
+      lastId = saveId;
+      captureAndSubmit();
+    }
+  } catch (err) {
+    discoverNewPort()
+  }
+}
+
+async function discoverNewPort() {
+  console.log("Searching for Hub...");
+  // Scan a small range of ports where the Hub usually lives
+  for (let port = 7382; port < 7399; port++) {
+    try {
+      const tester = await fetch(`http://localhost:${port}/`);
+      if (tester.ok) {
+        CURRENT_PORT = port.toString();
+        HUB_URL = `http://localhost:${port}`;
+        console.log(`Found Hub on new port: ${port}`);
+        return;
+      }
+    } catch (e) {}
   }
 }
 

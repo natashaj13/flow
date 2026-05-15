@@ -7,56 +7,82 @@ const { exec } = require('child_process');
 const { generateBriefing } = require('./briefing');
 const os = require('os');
 const pm2 = require('pm2');
+const net = require('net');
+
+const port = 7382; // Default port for the Hub
+
+function findAvailablePort(startPort) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', () => resolve(findAvailablePort(startPort + 1)));
+    server.listen(startPort, () => {
+      server.close(() => resolve(startPort));
+    });
+  });
+}
 
 async function ensureHubIsRunning() {
   return new Promise((resolve, reject) => {
-    pm2.connect((err) => {
-      if (err) {
-        console.error("Could not connect to PM2 manager");
-        process.exit(2);
-      }
+    pm2.connect(async (err) => {
+      if (err) return reject("PM2 Connection Error");
 
-      // Check if the process 'flow-hub' is already running
-      pm2.describe('flow-hub', (err, processDescription) => {
-        if (err || processDescription.length === 0 || processDescription[0].pm2_env.status !== 'online') {
-          console.log("Starting Flow Hub in background...");
-          
-          // Start the hub (point this to your hub's index.js)
-          const hubPath = path.join(__dirname, '../../hub/index.js');
-          
-          pm2.start({
-            script: hubPath,
-            name: 'flow-hub',
-            autorestart: true, // Re-wakes if it crashes
-            watch: false      // Don't watch files in production
-          }, (err, apps) => {
-            pm2.disconnect();   // Disconnect from PM2 after starting
-            if (err) reject(err);
-            resolve();
-          });
-        } else {
-          // Already running!
+      pm2.describe('flow-hub', async (err, desc) => {
+        // PEEK: Is it already online?
+        if (desc && desc.length > 0 && desc[0].pm2_env.status === 'online') {
+          const existingPort = desc[0].pm2_env.PORT;
           pm2.disconnect();
-          resolve();
+          console.log(`🔗 Connected to existing Hub on port: ${existingPort}`);
+          return resolve(existingPort);
         }
+
+        // RECOVERY: If it's stopped/errored or never existed, start it
+        console.log("🚀 Hub is offline. Finding a port and waking it up...");
+        const freePort = await findAvailablePort(7382);
+        const hubPath = path.join(__dirname, '../../hub/index.js');
+
+        pm2.start({
+          script: hubPath,
+          name: 'flow-hub',
+          env: { PORT: freePort } // Inject the port into the Hub's process.env
+        }, (err) => {
+          pm2.disconnect();
+          if (err) return reject(err);
+          resolve(freePort);
+        });
       });
     });
   });
 }
 
+const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+
 program
   .command('save <name>')
   .description('Snapshot the current workspace')
   .action(async (name) => {
-    await ensureHubIsRunning();
-    console.log(`Saving workspace ${name}`);
+    const port = await ensureHubIsRunning();
+    const HUB_URL = `http://localhost:${port}/set-active`;
     try {
-      // 1. Set the active name and save flag
-      await axios.post('http://localhost:3000/set-active', { name });
-      
-      //console.log(`✅ Signal sent! VS Code should save automatically in a second.`);
+      // Try the request up to 3 times
+      let attempts = 0;
+      while (attempts < 3) {
+        try {
+          await axios.post(HUB_URL, { name });
+          console.log(`✅ Snapshotting ${name}`);
+          return; // Success! Exit the function
+        } catch (err) {
+          attempts++;
+          if (attempts === 3) {
+            console.error("❌ Failed to reach Hub after 3 attempts. Try running 'pm2 logs flow-hub' to see if it crashed.");
+          } else {
+            await sleep(500); // Wait a bit before retrying
+          }
+        }
+      }
     } catch (err) {
-      console.error(err);
+      console.error(err);    
     }
   });
 
@@ -77,7 +103,9 @@ program
 
     // Restore Browser Tabs
     if (data.browser) {
-      data.browser.forEach(tab => exec(`open "${tab.url}"`));
+      data.browser.forEach(tab => exec(`open "${tab.url}"`, (err) => {
+        //if (err) console.error(`Failed to open ${tab.url}:`, err);
+      }));
     }
 
     // Restore VS Code Files

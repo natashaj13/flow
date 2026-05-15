@@ -4,7 +4,26 @@
   "version": "1.0",
   "description": "Snapshot browser tabs for Flow.",
   "permissions": ["tabs", "alarms"],
-  "host_permissions": ["http://localhost:3000/*"],
+  "host_permissions": [
+  "http://localhost:7382/*",
+  "http://localhost:7383/*",
+  "http://localhost:7384/*",
+  "http://localhost:7385/*",
+  "http://localhost:7386/*",
+  "http://localhost:7387/*",
+  "http://localhost:7388/*",
+  "http://localhost:7389/*",
+  "http://localhost:7390/*",
+  "http://localhost:7391/*",
+  "http://localhost:7392/*",
+  "http://localhost:7393/*",
+  "http://localhost:7394/*",
+  "http://localhost:7395/*",
+  "http://localhost:7396/*",
+  "http://localhost:7397/*",
+  "http://localhost:7398/*",
+  "http://localhost:7399/*"
+  ],
   "action": {
     "default_title": "Snapshot Tabs"
   },
