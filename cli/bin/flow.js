@@ -32,12 +32,12 @@ async function ensureHubIsRunning() {
         if (desc && desc.length > 0 && desc[0].pm2_env.status === 'online') {
           const existingPort = desc[0].pm2_env.PORT;
           pm2.disconnect();
-          console.log(`🔗 Connected to existing Hub on port: ${existingPort}`);
+          //console.log(`🔗 Connected to existing Hub on port: ${existingPort}`);
           return resolve(existingPort);
         }
 
         // RECOVERY: If it's stopped/errored or never existed, start it
-        console.log("🚀 Hub is offline. Finding a port and waking it up...");
+        //console.log("🚀 Hub is offline. Finding a port and waking it up...");
         const freePort = await findAvailablePort(7382);
         const hubPath = path.join(__dirname, '../../hub/index.js');
 
@@ -155,5 +155,63 @@ program
             console.log(`  ${f.replace('.json', '')}  (last saved: ${updated})`);
         });
     });
+
+
+program
+  .command('clear <name>')
+  .description('Delete a saved capsule')
+  .action(async (name) => {
+    try {
+      const capsulePath = path.join(os.homedir(), `.flow_capsules/${name}.json`);
+      if (!fs.existsSync(capsulePath)) {
+        console.error("Capsule not found!");
+        return;
+      }
+      const port = await ensureHubIsRunning();
+      const HUB_URL = `http://localhost:${port}`;
+      await axios.delete(`${HUB_URL}/clear/${name}`);
+      console.log(`Deleted workspace ${name}`);
+    } catch (error) {
+      console.error(`Failed to clear capsule: ${error.message}`);
+    }
+  });
+
+
+program
+  .command('describe <name>')
+  .description('Describe a saved capsule')
+  .action(async (name) => {
+    const capsulePath = path.join(os.homedir(), `.flow_capsules/${name}.json`);
+    if (!fs.existsSync(capsulePath)) {
+        console.error("Capsule not found!");
+        return;
+    }
+
+    const data = JSON.parse(fs.readFileSync(capsulePath));
+
+    const saved = data.lastUpdated
+        ? new Date(data.lastUpdated).toLocaleString()
+        : 'unknown';
+      console.log(`\nCapsule: ${name}  (saved: ${saved})\n`);
+
+      const openFiles = data.vscode?.openFiles || [];
+      console.log('VS Code files:');
+      if (openFiles.length > 0) {
+        openFiles.forEach(f => console.log(`  ${f}`));
+      } else {
+        console.log('  (none saved)');
+      }
+
+      console.log('');
+      console.log('Chrome tabs:');
+      const tabs = Array.isArray(data.browser) ? data.browser : [];
+      if (tabs.length > 0) {
+        tabs.forEach(t => console.log(`  ${t.url || t}`));
+      } else {
+        console.log('  (none saved)');
+      }
+      console.log('');
+      return;
+  });
 
 program.parse(process.argv);
