@@ -70,12 +70,12 @@ program
       while (attempts < 3) {
         try {
           await axios.post(HUB_URL, { name });
-          console.log(`✅ Snapshotting ${name}`);
+          console.log(`Saving workspace ${name}`);
           return; // Success! Exit the function
         } catch (err) {
           attempts++;
           if (attempts === 3) {
-            console.error("❌ Failed to reach Hub after 3 attempts. Try running 'pm2 logs flow-hub' to see if it crashed.");
+            console.error("Failed to connect after 3 attempts.");
           } else {
             await sleep(500); // Wait a bit before retrying
           }

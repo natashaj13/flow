@@ -2,8 +2,9 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const app = express();
+const { WebSocketServer } = require('ws');
 
+const app = express();
 app.use(express.json());
 
 // Path to store your capsules in the user's home directory
@@ -29,6 +30,16 @@ app.post('/set-active', (req, res) => {
     lastSaveId = Date.now();
     shouldSave = true; 
     console.log(`Active Capsule: ${activeCapsule} (ID: ${lastSaveId})`);
+
+    wss.clients.forEach(client => {
+        if (client.readyState === 1) { // 1 means OPEN
+            client.send(JSON.stringify({ 
+                action: 'save', 
+                name: activeCapsule, 
+                saveId: lastSaveId 
+            }));
+        }
+    });
     res.sendStatus(200);
 });
 
@@ -97,8 +108,24 @@ const PORT_FILE = path.join(os.homedir(), '.flow_port');
 
 const PORT = process.env.PORT || 7382;
 
-app.listen(PORT, () => {
-    // Write the port to the system so CLI and VS Code can see it
+// 3. Capture the HTTP server instance from app.listen
+const server = app.listen(PORT, () => {
     fs.writeFileSync(PORT_FILE, PORT.toString());
     console.log(`Hub locked to port ${PORT}`);
+});
+
+// 4. Attach WebSocket server to the exact same HTTP instance
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+    console.log('🌐 Browser extension linked via WebSocket stream');
+
+    // Keep-alive heartbeat loop every 20 seconds to prevent Chrome from sleeping
+    const pingInterval = setInterval(() => {
+        if (ws.readyState === ws.OPEN) {
+            ws.ping();
+        }
+    }, 20000);
+
+    ws.on('close', () => clearInterval(pingInterval));
 });
