@@ -23,4 +23,3 @@ cli/.env
 # --- Local Environment & Build ---
 .npm/
 .eslintcache
-package-lock.json
