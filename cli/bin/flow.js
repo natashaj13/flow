@@ -23,14 +23,13 @@ function findAvailablePort(startPort) {
 
 async function ensureHubIsRunning() {
   return new Promise((resolve, reject) => {
-    // If the port file exists, assume it's running on that port to prevent race conditions
     if (fs.existsSync(PORT_FILE)) {
       const savedPort = parseInt(fs.readFileSync(PORT_FILE, 'utf8').trim(), 10);
       if (savedPort) return resolve(savedPort);
     }
 
     pm2.connect(async (err) => {
-      if (err) return resolve(7382); // Fallback to default port if PM2 has issues
+      if (err) return resolve(7382);
 
       pm2.describe('flow-hub', async (err, desc) => {
         if (desc && desc.length > 0 && desc[0].pm2_env.status === 'online') {
@@ -59,6 +58,12 @@ async function ensureHubIsRunning() {
 
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
+// --- CUSTOM MAIN MENU HELP LAYOUT ---
+program.addHelpText('after', `
+Save Command Extension:
+  flow save <name> -summary <summary>   (Summary flag is optional)
+`);
+
 program
   .command('save [args...]')
   .description('Snapshot the current workspace')
@@ -84,21 +89,30 @@ program
 
     try {
       let attempts = 0;
+      let success = false;
       while (attempts < 3) {
         try {
           const response = await axios.post(HUB_URL, { name, summary: summaryText });
           if (response.status === 200) {
-            console.log(`✅ Snapshotting ${name}`);
-            return; 
+            success = true;
+            break; 
           }
         } catch (err) {
           attempts++;
           if (attempts === 3) {
             console.error("❌ Failed to reach Hub after 3 attempts. Try running 'pm2 logs flow-hub'.");
+            return;
           } else {
             await sleep(500); 
           }
         }
+      }
+
+      if (success) {
+        console.log(`⏳ Capturing workspace data for ${name}...`);
+        // Pause for 2 seconds to allow background extensions to catch up and hit /snapshot
+        await sleep(2000);
+        console.log(`✅ Snapshotting complete!`);
       }
     } catch (err) {
       console.error(err);    
@@ -118,6 +132,7 @@ program
 
     const data = JSON.parse(fs.readFileSync(capsulePath, 'utf8'));
 
+    // --- REPLACED GEMINI BRIEFING WITH DIRECT SUMMARY PRINT ---
     console.log(`\n===================================`);
     console.log(`📦 Loading Capsule: ${name}`);
     console.log(`📝 Summary: ${data.summary || "No summary provided."}`);

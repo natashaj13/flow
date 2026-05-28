@@ -22,7 +22,6 @@ app.get('/', (req, res) => {
     res.send('Hub is alive');
 });
 
-// Endpoint triggered instantly by 'flow save'
 app.post('/set-active', (req, res) => {
     activeCapsule = req.body.name;
     activeSummary = req.body.summary; 
@@ -31,20 +30,15 @@ app.post('/set-active', (req, res) => {
     shouldSave = true; 
     console.log(`Active Capsule: ${activeCapsule} | Summary: ${activeSummary}`);
     
-    // --- FIX: Instantly write the base file to disk so 'flow list' sees it immediately ---
+    // Instantly write base skeleton file to disk with summary text
     const filePath = path.join(CAPSULE_DIR, `${activeCapsule}.json`);
-    
-    // Load existing data if it exists, otherwise start fresh
-    let capsule = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath)) : {};
+    let capsule = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf8')) : {};
     
     capsule.name = activeCapsule;
     capsule.summary = activeSummary || "No summary provided.";
     capsule.lastUpdated = new Date().toISOString();
     
-    // Write it to disk right now!
     fs.writeFileSync(filePath, JSON.stringify(capsule, null, 2));
-    // -----------------------------------------------------------------------------------
-
     return res.status(200).json({ success: true });
 });
 
@@ -65,12 +59,11 @@ app.post('/snapshot', (req, res) => {
     }
 
     const filePath = path.join(CAPSULE_DIR, `${activeCapsule}.json`);
-
-    let capsule = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath)) : {};
+    let capsule = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf8')) : {};
     
     capsule.name = activeCapsule;
-    capsule.summary = activeSummary || "No summary provided.";
-    capsule[type] = data; // Updates 'vscode' or 'browser' data inside the file safely
+    capsule.summary = activeSummary || capsule.summary || "No summary provided.";
+    capsule[type] = data; 
     capsule.lastUpdated = new Date().toISOString();
     
     fs.writeFileSync(filePath, JSON.stringify(capsule, null, 2));
