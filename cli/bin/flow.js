@@ -4,12 +4,11 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
-const { generateBriefing } = require('./briefing');
 const os = require('os');
 const pm2 = require('pm2');
 const net = require('net');
 
-const port = 7382; // Default port for the Hub
+const PORT_FILE = path.join(os.homedir(), '.flow_port');
 
 function findAvailablePort(startPort) {
   return new Promise((resolve) => {
@@ -24,29 +23,32 @@ function findAvailablePort(startPort) {
 
 async function ensureHubIsRunning() {
   return new Promise((resolve, reject) => {
+    // If the port file exists, assume it's running on that port to prevent race conditions
+    if (fs.existsSync(PORT_FILE)) {
+      const savedPort = parseInt(fs.readFileSync(PORT_FILE, 'utf8').trim(), 10);
+      if (savedPort) return resolve(savedPort);
+    }
+
     pm2.connect(async (err) => {
-      if (err) return reject("PM2 Connection Error");
+      if (err) return resolve(7382); // Fallback to default port if PM2 has issues
 
       pm2.describe('flow-hub', async (err, desc) => {
-        // PEEK: Is it already online?
         if (desc && desc.length > 0 && desc[0].pm2_env.status === 'online') {
-          const existingPort = desc[0].pm2_env.PORT;
+          const existingPort = desc[0].pm2_env.PORT || 7382;
           pm2.disconnect();
-          //console.log(`🔗 Connected to existing Hub on port: ${existingPort}`);
           return resolve(existingPort);
         }
 
-        // RECOVERY: If it's stopped/errored or never existed, start it
-        //console.log("🚀 Hub is offline. Finding a port and waking it up...");
         const freePort = await findAvailablePort(7382);
         const hubPath = path.join(__dirname, '../../hub/index.js');
 
         pm2.start({
           script: hubPath,
           name: 'flow-hub',
-          env: { PORT: freePort } // Inject the port into the Hub's process.env
+          env: { PORT: freePort } 
         }, (err) => {
           pm2.disconnect();
+          fs.writeFileSync(PORT_FILE, freePort.toString());
           if (err) return reject(err);
           resolve(freePort);
         });
@@ -57,27 +59,44 @@ async function ensureHubIsRunning() {
 
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
-
 program
-  .command('save <name>')
+  .command('save [args...]')
   .description('Snapshot the current workspace')
-  .action(async (name) => {
+  .allowUnknownOption()
+  .action(async (args) => {
+    const name = args[0]; 
+
+    if (!name) {
+      console.error("❌ Error: Please provide a capsule name. Example: flow save my-capsule");
+      return;
+    }
+
     const port = await ensureHubIsRunning();
     const HUB_URL = `http://localhost:${port}/set-active`;
+    
+    const rawArgs = process.argv;
+    const summaryIndex = rawArgs.indexOf('-summary');
+    let summaryText = null;
+
+    if (summaryIndex !== -1 && rawArgs[summaryIndex + 1]) {
+      summaryText = rawArgs[summaryIndex + 1];
+    }
+
     try {
-      // Try the request up to 3 times
       let attempts = 0;
       while (attempts < 3) {
         try {
-          await axios.post(HUB_URL, { name });
-          console.log(`✅ Snapshotting ${name}`);
-          return; // Success! Exit the function
+          const response = await axios.post(HUB_URL, { name, summary: summaryText });
+          if (response.status === 200) {
+            console.log(`✅ Snapshotting ${name}`);
+            return; 
+          }
         } catch (err) {
           attempts++;
           if (attempts === 3) {
-            console.error("❌ Failed to reach Hub after 3 attempts. Try running 'pm2 logs flow-hub' to see if it crashed.");
+            console.error("❌ Failed to reach Hub after 3 attempts. Try running 'pm2 logs flow-hub'.");
           } else {
-            await sleep(500); // Wait a bit before retrying
+            await sleep(500); 
           }
         }
       }
@@ -97,31 +116,25 @@ program
       return;
     }
 
-    const data = JSON.parse(fs.readFileSync(capsulePath));
+    const data = JSON.parse(fs.readFileSync(capsulePath, 'utf8'));
 
-    //await generateBriefing(data);
+    console.log(`\n===================================`);
+    console.log(`📦 Loading Capsule: ${name}`);
+    console.log(`📝 Summary: ${data.summary || "No summary provided."}`);
+    console.log(`===================================\n`);
 
-    // Restore Browser Tabs
     if (data.browser) {
-      data.browser.forEach(tab => exec(`open "${tab.url}"`, (err) => {
-        //if (err) console.error(`Failed to open ${tab.url}:`, err);
-      }));
+      data.browser.forEach(tab => exec(`open "${tab.url || tab}"`, (err) => {}));
     }
 
-    // Restore VS Code Files
     if (data.vscode && data.vscode.openFiles) {
-      // const files = data.vscode.openFiles.map(f => `"${f}"`).join(' ');
-      // exec(`code -n ${files}`);
       const { projectRoot, openFiles } = data.vscode;
-        
-      let command = 'code -n'; // -n for new window
+      let command = 'code -n'; 
 
-        // Add the folder (Sidebar)
       if (projectRoot) {
           command += ` "${projectRoot}"`;
       }
 
-        // Add the specific files (Tabs)
       if (openFiles && openFiles.length > 0) {
           const files = openFiles.map(f => `"${f}"`).join(' ');
           command += ` ${files}`;
@@ -130,7 +143,6 @@ program
       console.log(`Restoring Workspace: ${projectRoot || 'Files only'}`);
       exec(command);
     }
-
   });
 
 program
@@ -149,13 +161,10 @@ program
         }
         files.forEach(f => {
             const data = JSON.parse(fs.readFileSync(path.join(capsules, f), 'utf8'));
-            const updated = data.lastUpdated
-                ? new Date(data.lastUpdated).toLocaleString()
-                : 'unknown';
+            const updated = data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : 'unknown';
             console.log(`  ${f.replace('.json', '')}  (last saved: ${updated})`);
         });
     });
-
 
 program
   .command('clear <name>')
@@ -174,44 +183,6 @@ program
     } catch (error) {
       console.error(`Failed to clear capsule: ${error.message}`);
     }
-  });
-
-
-program
-  .command('describe <name>')
-  .description('Describe a saved capsule')
-  .action(async (name) => {
-    const capsulePath = path.join(os.homedir(), `.flow_capsules/${name}.json`);
-    if (!fs.existsSync(capsulePath)) {
-        console.error("Capsule not found!");
-        return;
-    }
-
-    const data = JSON.parse(fs.readFileSync(capsulePath));
-
-    const saved = data.lastUpdated
-        ? new Date(data.lastUpdated).toLocaleString()
-        : 'unknown';
-      console.log(`\nCapsule: ${name}  (saved: ${saved})\n`);
-
-      const openFiles = data.vscode?.openFiles || [];
-      console.log('VS Code files:');
-      if (openFiles.length > 0) {
-        openFiles.forEach(f => console.log(`  ${f}`));
-      } else {
-        console.log('  (none saved)');
-      }
-
-      console.log('');
-      console.log('Chrome tabs:');
-      const tabs = Array.isArray(data.browser) ? data.browser : [];
-      if (tabs.length > 0) {
-        tabs.forEach(t => console.log(`  ${t.url || t}`));
-      } else {
-        console.log('  (none saved)');
-      }
-      console.log('');
-      return;
   });
 
 program.parse(process.argv);

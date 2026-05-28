@@ -6,15 +6,14 @@ const app = express();
 
 app.use(express.json());
 
-// Path to store your capsules in the user's home directory
 const CAPSULE_DIR = path.join(os.homedir(), '.flow_capsules');
 
-// Ensure the directory exists when the server starts
 if (!fs.existsSync(CAPSULE_DIR)) {
     fs.mkdirSync(CAPSULE_DIR, { recursive: true });
 }
 
 let activeCapsule = 'default';
+let activeSummary = null; 
 let checklist = { vscode: false, browser: false };
 let lastSaveId = null;
 let shouldSave = false;
@@ -23,18 +22,33 @@ app.get('/', (req, res) => {
     res.send('Hub is alive');
 });
 
+// Endpoint triggered instantly by 'flow save'
 app.post('/set-active', (req, res) => {
     activeCapsule = req.body.name;
+    activeSummary = req.body.summary; 
     checklist = { vscode: false, browser: false };    
     lastSaveId = Date.now();
     shouldSave = true; 
-    console.log(`Active Capsule: ${activeCapsule} (ID: ${lastSaveId})`);
-    res.sendStatus(200);
+    console.log(`Active Capsule: ${activeCapsule} | Summary: ${activeSummary}`);
+    
+    // --- FIX: Instantly write the base file to disk so 'flow list' sees it immediately ---
+    const filePath = path.join(CAPSULE_DIR, `${activeCapsule}.json`);
+    
+    // Load existing data if it exists, otherwise start fresh
+    let capsule = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath)) : {};
+    
+    capsule.name = activeCapsule;
+    capsule.summary = activeSummary || "No summary provided.";
+    capsule.lastUpdated = new Date().toISOString();
+    
+    // Write it to disk right now!
+    fs.writeFileSync(filePath, JSON.stringify(capsule, null, 2));
+    // -----------------------------------------------------------------------------------
+
+    return res.status(200).json({ success: true });
 });
 
 app.get('/check-save', (req, res) => {
-    // FIX: Removed the 'const' that was re-declaring shouldSave locally
-    // We want to return the global state
     res.json({ 
         shouldSave: shouldSave, 
         name: activeCapsule,
@@ -47,20 +61,16 @@ app.post('/snapshot', (req, res) => {
     
     if (!activeCapsule || activeCapsule === 'undefined') {
         console.error("Rejected: No active capsule name set.");
-        return res.sendStatus(400);
+        return res.status(400).json({ error: "No active capsule set" });
     }
 
     const filePath = path.join(CAPSULE_DIR, `${activeCapsule}.json`);
 
-    // FIX: Changed 'capsulePath' to 'filePath' (it was crashing here before)
-    if (!fs.existsSync(path.dirname(filePath))) {
-        fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    }
-
-    // Load existing or create new
     let capsule = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath)) : {};
     
-    capsule[type] = data;
+    capsule.name = activeCapsule;
+    capsule.summary = activeSummary || "No summary provided.";
+    capsule[type] = data; // Updates 'vscode' or 'browser' data inside the file safely
     capsule.lastUpdated = new Date().toISOString();
     
     fs.writeFileSync(filePath, JSON.stringify(capsule, null, 2));
@@ -68,37 +78,30 @@ app.post('/snapshot', (req, res) => {
 
     if (checklist.hasOwnProperty(type)) {
         checklist[type] = true;
-        console.log(`[${type}] reported in.`);
     }
 
     if (checklist.vscode && checklist.browser) {
-        console.log(`Both synced for ${activeCapsule}. Cycle complete.`);
-        shouldSave = false; // Lower the flag now that we are done
+        shouldSave = false; 
     }
-    res.sendStatus(200);
+    
+    return res.status(200).json({ success: true });
 });
-
 
 app.delete('/clear/:name', (req, res) => {
     const capsuleName = req.params.name;
-    console.log(`Attempting to delete capsule: ${capsuleName}`);
     const filePath = path.join(CAPSULE_DIR, `${capsuleName}.json`);
     if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath); // Deletes the file
-        console.log(`Deleted capsule: ${capsuleName}`);
+        fs.unlinkSync(filePath); 
         res.status(200).send(`Capsule ${capsuleName} cleared.`);
     } else {
-        console.error(`${capsuleName} not found.`);
         res.status(404).send('Capsule not found.');
     }
 });
 
 const PORT_FILE = path.join(os.homedir(), '.flow_port');
-
 const PORT = process.env.PORT || 7382;
 
 app.listen(PORT, () => {
-    // Write the port to the system so CLI and VS Code can see it
     fs.writeFileSync(PORT_FILE, PORT.toString());
     console.log(`Hub locked to port ${PORT}`);
 });
