@@ -16,6 +16,7 @@ if (!fs.existsSync(CAPSULE_DIR)) {
 }
 
 let activeCapsule = 'default';
+let activeSummary = null; 
 let checklist = { vscode: false, browser: false };
 let lastSaveId = null;
 let shouldSave = false;
@@ -26,6 +27,7 @@ app.get('/', (req, res) => {
 
 app.post('/set-active', (req, res) => {
     activeCapsule = req.body.name;
+    activeSummary = req.body.summary; 
     checklist = { vscode: false, browser: false };    
     lastSaveId = Date.now();
     shouldSave = true; 
@@ -35,6 +37,7 @@ app.post('/set-active', (req, res) => {
         if (client.readyState === 1) { // 1 means OPEN
             client.send(JSON.stringify({ 
                 action: 'save', 
+                summary: activeSummary || "No summary provided.",
                 name: activeCapsule, 
                 saveId: lastSaveId 
             }));
@@ -72,6 +75,8 @@ app.post('/snapshot', (req, res) => {
     let capsule = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath)) : {};
     
     capsule[type] = data;
+    capsule.name = activeCapsule;
+    capsule.summary = activeSummary || capsule.summary || "No summary provided.";
     capsule.lastUpdated = new Date().toISOString();
     
     fs.writeFileSync(filePath, JSON.stringify(capsule, null, 2));

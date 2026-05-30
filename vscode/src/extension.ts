@@ -19,42 +19,49 @@ function getHubUrl() {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log("🚀 FLOW EXTENSION IS STARTING..."); // Add this
+    console.log("🚀 FLOW EXTENSION IS STARTING...");
     
-    const HUB_URL = getHubUrl();
-    let lastProcessedId: number | null = null; // Track what we've already saved
-    console.log(`Using Hub URL: ${HUB_URL}`); // Add this
+    let lastProcessedId: number | null = null; 
+
     setInterval(async () => {
         if (!vscode.window.state.focused) return;
         
+        // 1. CRITICAL: Calculate the URL INSIDE the loop
+        const DYNAMIC_HUB_URL = getHubUrl(); 
+        
         try {
-            const res = await axios.get(`${HUB_URL}/check-save`);
+            const res = await axios.get(`${DYNAMIC_HUB_URL}/check-save`);
             const { shouldSave, saveId } = res.data;
 
-            // Only trigger if the flag is UP and this is a NEW save request
             if (shouldSave && saveId !== lastProcessedId) {
                 lastProcessedId = saveId;
-                await captureAndSubmit();
+                console.log(`📥 Valid directive caught! Saving state to Hub via ${DYNAMIC_HUB_URL}...`);
+                await captureAndSubmit(DYNAMIC_HUB_URL); // Pass it down so submission hits the right port too
             }
-        } catch (e) { /* Hub offline */ }
+        } catch (e) { 
+            if (cachedPort) {
+                console.log(`❌ Hub lost at port ${cachedPort}. Dropping cache to trigger re-discovery...`);
+            }
+            cachedPort = null; 
+        }
     }, 2000);
+}
 
-    async function captureAndSubmit() {
-        const tabs = vscode.window.tabGroups.all
-            .flatMap(g => g.tabs)
-            .filter(t => t.input instanceof vscode.TabInputText)
-            .map(t => (t.input as vscode.TabInputText).uri.fsPath);
+async function captureAndSubmit(url: string) {
+    const tabs = vscode.window.tabGroups.all
+        .flatMap(g => g.tabs)
+        .filter(t => t.input instanceof vscode.TabInputText)
+        .map(t => (t.input as vscode.TabInputText).uri.fsPath);
 
-        const payload = {
-            type: 'vscode', // So the Hub knows where to put it in the JSON
-            data: {
-                openFiles: tabs,
-                activeFile: vscode.window.activeTextEditor?.document.fileName,
-                projectRoot: vscode.workspace.workspaceFolders?.[0].uri.fsPath
-            }
-        };
+    const payload = {
+        type: 'vscode', // So the Hub knows where to put it in the JSON
+        data: {
+            openFiles: tabs,
+            activeFile: vscode.window.activeTextEditor?.document.fileName,
+            projectRoot: vscode.workspace.workspaceFolders?.[0].uri.fsPath
+        }
+    };
 
-        await axios.post(`${HUB_URL}/snapshot`, payload);
-        vscode.window.setStatusBarMessage("✅ Flow: Auto-Saved!", 3000);
-    }
+    await axios.post(`${url}/snapshot`, payload);
+    vscode.window.setStatusBarMessage("✅ Flow: Auto-Saved!", 3000);
 }

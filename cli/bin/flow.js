@@ -58,33 +58,66 @@ async function ensureHubIsRunning() {
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
 
+program.addHelpText('after', `
+Save Command Extension:
+  flow save <name> -m <summary>   (Summary flag is optional)
+`);
+
 program
-  .command('save <name>')
+  .command('save [args...]')
   .description('Snapshot the current workspace')
-  .action(async (name) => {
+  .allowUnknownOption()
+  .action(async (args) => {
+    const name = args[0]; 
+
+    if (!name) {
+      console.error("❌ Error: Please provide a capsule name. Example: flow save my-capsule");
+      return;
+    }
+
     const port = await ensureHubIsRunning();
     const HUB_URL = `http://localhost:${port}/set-active`;
+    
+    const rawArgs = process.argv;
+    const summaryIndex = rawArgs.indexOf('-m');
+    let summaryText = null;
+
+    if (summaryIndex !== -1 && rawArgs[summaryIndex + 1]) {
+      summaryText = rawArgs[summaryIndex + 1];
+    }
+
     try {
-      // Try the request up to 3 times
       let attempts = 0;
+      let success = false;
       while (attempts < 3) {
         try {
-          await axios.post(HUB_URL, { name });
-          console.log(`Saving workspace ${name}`);
-          return; // Success! Exit the function
+          const response = await axios.post(HUB_URL, { name, summary: summaryText });
+          if (response.status === 200) {
+            success = true;
+            break; 
+          }
         } catch (err) {
           attempts++;
           if (attempts === 3) {
-            console.error("Failed to connect after 3 attempts.");
+            console.error("Failed to connect");
+            return;
           } else {
-            await sleep(500); // Wait a bit before retrying
+            await sleep(500); 
           }
         }
+      }
+
+      if (success) {
+        console.log(`Saving workspace ${name}`);
+        // Pause for 2 seconds to allow background extensions to catch up and hit /snapshot
+        await sleep(2000);
+        console.log(`Save complete`);
       }
     } catch (err) {
       console.error(err);    
     }
   });
+
 
 program
   .command('load <name>')
@@ -97,31 +130,24 @@ program
       return;
     }
 
-    const data = JSON.parse(fs.readFileSync(capsulePath));
+    const data = JSON.parse(fs.readFileSync(capsulePath, 'utf8'));
 
-    //await generateBriefing(data);
+    // --- REPLACED GEMINI BRIEFING WITH DIRECT SUMMARY PRINT ---
+    console.log(`Loading workspace ${name}`);
+    console.log(`Summary: ${data.summary || "No summary provided."}`);
 
-    // Restore Browser Tabs
     if (data.browser) {
-      data.browser.forEach(tab => exec(`open "${tab.url}"`, (err) => {
-        //if (err) console.error(`Failed to open ${tab.url}:`, err);
-      }));
+      data.browser.forEach(tab => exec(`open "${tab.url || tab}"`, (err) => {}));
     }
 
-    // Restore VS Code Files
     if (data.vscode && data.vscode.openFiles) {
-      // const files = data.vscode.openFiles.map(f => `"${f}"`).join(' ');
-      // exec(`code -n ${files}`);
       const { projectRoot, openFiles } = data.vscode;
-        
-      let command = 'code -n'; // -n for new window
+      let command = 'code -n'; 
 
-        // Add the folder (Sidebar)
       if (projectRoot) {
           command += ` "${projectRoot}"`;
       }
 
-        // Add the specific files (Tabs)
       if (openFiles && openFiles.length > 0) {
           const files = openFiles.map(f => `"${f}"`).join(' ');
           command += ` ${files}`;
@@ -130,8 +156,83 @@ program
       console.log(`Restoring Workspace: ${projectRoot || 'Files only'}`);
       exec(command);
     }
-
   });
+
+
+// program
+//   .command('save <name>')
+//   .description('Snapshot the current workspace')
+//   .action(async (name) => {
+//     const port = await ensureHubIsRunning();
+//     const HUB_URL = `http://localhost:${port}/set-active`;
+//     try {
+//       // Try the request up to 3 times
+//       let attempts = 0;
+//       while (attempts < 3) {
+//         try {
+//           await axios.post(HUB_URL, { name });
+//           console.log(`Saving workspace ${name}`);
+//           return; // Success! Exit the function
+//         } catch (err) {
+//           attempts++;
+//           if (attempts === 3) {
+//             console.error("Failed to connect after 3 attempts.");
+//           } else {
+//             await sleep(500); // Wait a bit before retrying
+//           }
+//         }
+//       }
+//     } catch (err) {
+//       console.error(err);    
+//     }
+//   });
+
+// program
+//   .command('load <name>')
+//   .description('Restore a workspace')
+//   .action(async (name) => {
+//     const capsulePath = path.join(os.homedir(), `.flow_capsules/${name}.json`);
+    
+//     if (!fs.existsSync(capsulePath)) {
+//       console.error("Capsule not found!");
+//       return;
+//     }
+
+//     const data = JSON.parse(fs.readFileSync(capsulePath));
+
+//     //await generateBriefing(data);
+
+//     // Restore Browser Tabs
+//     if (data.browser) {
+//       data.browser.forEach(tab => exec(`open "${tab.url}"`, (err) => {
+//         //if (err) console.error(`Failed to open ${tab.url}:`, err);
+//       }));
+//     }
+
+//     // Restore VS Code Files
+//     if (data.vscode && data.vscode.openFiles) {
+//       // const files = data.vscode.openFiles.map(f => `"${f}"`).join(' ');
+//       // exec(`code -n ${files}`);
+//       const { projectRoot, openFiles } = data.vscode;
+        
+//       let command = 'code -n'; // -n for new window
+
+//         // Add the folder (Sidebar)
+//       if (projectRoot) {
+//           command += ` "${projectRoot}"`;
+//       }
+
+//         // Add the specific files (Tabs)
+//       if (openFiles && openFiles.length > 0) {
+//           const files = openFiles.map(f => `"${f}"`).join(' ');
+//           command += ` ${files}`;
+//       }
+
+//       console.log(`Restoring Workspace: ${projectRoot || 'Files only'}`);
+//       exec(command);
+//     }
+
+//   });
 
 program
     .command('list')

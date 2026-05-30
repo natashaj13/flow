@@ -2,6 +2,29 @@ let CURRENT_PORT = '7382';
 let HUB_URL = `http://localhost:${CURRENT_PORT}`;
 let socket = null;
 
+
+chrome.runtime.onStartup.addListener(() => {
+  console.log("☀️ Chrome started! Initializing Flow Link...");
+  initializeFlow();
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  console.log("🚀 Extension installed/reloaded!");
+  initializeFlow();
+});
+
+chrome.alarms.create('flow-keepalive', { periodInMinutes: 1 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'flow-keepalive') {
+    console.log("⏰ Heartbeat alarm fired. Checking socket integrity...");
+    // If socket died while Chrome was asleep, restore it
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      initializeFlow();
+    }
+  }
+});
+
 // Entry Point
 async function initializeFlow() {
   const hubFound = await discoverHubPort();
@@ -20,10 +43,12 @@ async function discoverHubPort() {
     try {
       const tester = await fetch(`http://localhost:${port}/`);
       if (tester.ok) {
-        CURRENT_PORT = port.toString();
-        HUB_URL = `http://localhost:${port}`;
-        console.log(`Found active Hub instance on port: ${port}`);
-        return true;
+        const text = await tester.text();
+        if (text === 'Hub is alive') { // Explicitly verify it's YOUR app!
+          CURRENT_PORT = port.toString();
+          HUB_URL = `http://localhost:${port}`;
+          return true;
+        }
       }
     } catch (e) {}
   }
