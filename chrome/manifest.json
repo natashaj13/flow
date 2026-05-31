@@ -24,8 +24,14 @@
   "http://localhost:7398/*",
   "http://localhost:7399/*"
   ],
+  "icons": {
+    "16": "images/16.png",
+    "48": "images/48.png",
+    "128": "images/128.png"
+  },
   "action": {
-    "default_title": "Snapshot Tabs"
+    "default_title": "Snapshot Tabs", 
+    "default_icon": "images/16.png"
   },
   "background": {
     "service_worker": "background.js"
