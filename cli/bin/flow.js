@@ -101,11 +101,19 @@ program
 
     //await generateBriefing(data);
 
-    // Restore Browser Tabs
+    // Restore Browser Tabs — open all tabs together in a single new Chrome window.
     if (data.browser) {
-      data.browser.forEach(tab => exec(`open "${tab.url}"`, (err) => {
-        //if (err) console.error(`Failed to open ${tab.url}:`, err);
-      }));
+      const urls = data.browser.map(tab => tab.url || tab);
+
+      if (process.platform === 'win32') {
+        const chromePath = path.join(
+          process.env.PROGRAMFILES || 'C:\\Program Files',
+          'Google', 'Chrome', 'Application', 'chrome.exe'
+        );
+        exec(`"${chromePath}" ${['--new-window', ...urls].map(a => `"${a}"`).join(' ')}`);
+      } else {
+        exec(`open -na "Google Chrome" --args --new-window ${urls.map(u => `"${u}"`).join(' ')}`);
+      }
     }
 
     // Restore VS Code Files
