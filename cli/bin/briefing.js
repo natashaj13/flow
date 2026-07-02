@@ -56,7 +56,11 @@ function buildContext(capsule) {
     }
 
     if (capsule.browser && capsule.browser.length > 0) {
-        const tabs = capsule.browser.slice(0, 5).join('\n  - ');
+        // Tabs are { url, title } objects; render the URL (with title when present).
+        const tabs = capsule.browser.slice(0, 5).map(t => {
+            const url = t.url || t;
+            return t.title ? `${url} — "${t.title}"` : `${url}`;
+        }).join('\n  - ');
         parts.push(`\nBrowser tabs open:\n  - ${tabs}`);
     }
 

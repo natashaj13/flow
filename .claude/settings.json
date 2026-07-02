@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"console.log\\('deps:', Object.keys\\(require\\('./package.json'\\).dependencies||{}\\).join\\(', '\\)\\)\")",
+      "Bash(rtk ls *)"
+    ]
+  }
+}

@@ -3,7 +3,7 @@
   "name": "Flow",
   "version": "1.0",
   "description": "Snapshot browser tabs for Flow.",
-  "permissions": ["tabs", "alarms"],
+  "permissions": ["tabs", "alarms", "identity"],
   "host_permissions": [
   "http://localhost:7382/*",
   "http://localhost:7383/*",
