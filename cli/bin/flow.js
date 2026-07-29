@@ -199,7 +199,7 @@ program
       let success = false;
       while (attempts < 3) {
         try {
-          const response = await axios.post(HUB_URL, { name, summary: summaryText });
+          const response = await axios.post(HUB_URL, { name, summary: summaryText }, { timeout: 5000 });
           if (response.status === 200) {
             success = true;
             break; 
@@ -216,18 +216,26 @@ program
       }
 
       if (success) {
-        console.log(`Saving workspace ${name}`);
-        // Poll the Hub until both clients have reported in, instead of a blind
-        // sleep that could race the VS Code 2s poll interval.
+        console.log(`Saving workspace ${name}...`);
+        // Wait for the extensions to report in. The "both synced" signal
+        // (shouldSave=false) rarely fires in practice — VS Code only reports
+        // while it's focused — so don't block on it. Once ANY client reports,
+        // give stragglers a short grace and finish; otherwise cap the total wait
+        // so `flow save` never appears to hang.
         const STATUS_URL = `http://localhost:${port}/check-save`;
-        const deadline = Date.now() + 10000; // 10s max
+        const hardDeadline = Date.now() + 6000;
         let checklist = { vscode: false, browser: false };
-        while (Date.now() < deadline) {
-          await sleep(500);
+        let firstReportAt = null;
+        while (Date.now() < hardDeadline) {
+          await sleep(300);
           try {
-            const { data } = await axios.get(STATUS_URL);
+            const { data } = await axios.get(STATUS_URL, { timeout: 2000 });
             checklist = data.checklist || checklist;
-            if (data.shouldSave === false) break; // Hub lowers this when both are in
+            if (data.shouldSave === false) break; // both clients synced
+            if (checklist.vscode || checklist.browser) {
+              if (firstReportAt === null) firstReportAt = Date.now();
+              if (Date.now() - firstReportAt > 1500) break; // stragglers had their chance
+            }
           } catch (e) { /* transient; keep polling */ }
         }
 
@@ -237,7 +245,7 @@ program
         if (saved.length > 0) {
           console.log(`Save complete (${saved.join(', ')})`);
         } else {
-          console.log(`Save complete, but no editor/browser reported in — is the VS Code extension or Chrome extension running?`);
+          console.log(`Save complete, but nothing reported in — is the VS Code and/or Chrome extension running?`);
         }
       }
     } catch (err) {
