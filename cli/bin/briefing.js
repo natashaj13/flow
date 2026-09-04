@@ -6,6 +6,17 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+// New capsules store one vscode entry per window; legacy ones store a single
+// object. Flatten to one view: the focused window drives activeFile/projectRoot,
+// openFiles is the union across windows.
+function flattenVscode(capsule) {
+    const wins = Array.isArray(capsule.vscode) ? capsule.vscode : (capsule.vscode ? [capsule.vscode] : []);
+    if (wins.length === 0) return null;
+    const primary = wins.find(w => w && w.focused) || wins.find(w => w && w.activeFile) || wins[0];
+    const openFiles = [...new Set(wins.flatMap(w => (w && Array.isArray(w.openFiles)) ? w.openFiles : []))];
+    return { activeFile: primary.activeFile, projectRoot: primary.projectRoot, openFiles };
+}
+
 /**
  * Gathers everything worth sending to the LLM:
  *  - active file name + last 20 lines
@@ -16,8 +27,9 @@ const { execSync } = require('child_process');
 function buildContext(capsule) {
     const parts = [];
 
-    if (capsule.vscode) {
-        const { activeFile, openFiles, projectRoot } = capsule.vscode;
+    const vs = flattenVscode(capsule);
+    if (vs) {
+        const { activeFile, openFiles, projectRoot } = vs;
 
         if (activeFile) {
             parts.push(`Active file: ${path.basename(activeFile)}`);
@@ -111,12 +123,13 @@ ${context}
 
 async function filterRelevantTabs(capsule, filePath) {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || !capsule.browser || !capsule.vscode) return;
+    const vs = flattenVscode(capsule);
+    if (!apiKey || !capsule.browser || !vs) return;
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
 
-    const { activeFile, openFiles, projectRoot } = capsule.vscode;
+    const { activeFile, openFiles, projectRoot } = vs;
     const prompt = `You are a developer tool. Given the VS Code context and a list of browser tabs, return ONLY a JSON array of the tab URLs that are relevant to the project being worked on. No explanation, no markdown — just the raw JSON array.
 
 VS Code context:

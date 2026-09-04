@@ -217,13 +217,14 @@ program
 
       if (success) {
         console.log(`Saving workspace ${name}...`);
-        // Wait for the extensions to report in. The "both synced" signal
-        // (shouldSave=false) rarely fires in practice — VS Code only reports
-        // while it's focused — so don't block on it. Once ANY client reports,
-        // give stragglers a short grace and finish; otherwise cap the total wait
-        // so `flow save` never appears to hang.
+        // Wait for the extensions to report in. Every VS Code window reports
+        // independently on a 2s poll (plus a minimized check), so after the
+        // first client lands, give the remaining windows a grace long enough
+        // to cover a full poll cycle before declaring the save done. Late
+        // windows still land server-side — the hub accepts them for the whole
+        // 20s save window — this wait is only for accurate feedback here.
         const STATUS_URL = `http://localhost:${port}/check-save`;
-        const hardDeadline = Date.now() + 6000;
+        const hardDeadline = Date.now() + 9000;
         let checklist = { vscode: false, browser: false };
         let firstReportAt = null;
         while (Date.now() < hardDeadline) {
@@ -231,10 +232,9 @@ program
           try {
             const { data } = await axios.get(STATUS_URL, { timeout: 2000 });
             checklist = data.checklist || checklist;
-            if (data.shouldSave === false) break; // both clients synced
             if (checklist.vscode || checklist.browser) {
               if (firstReportAt === null) firstReportAt = Date.now();
-              if (Date.now() - firstReportAt > 1500) break; // stragglers had their chance
+              if (Date.now() - firstReportAt > 4000) break; // stragglers had their chance
             }
           } catch (e) { /* transient; keep polling */ }
         }
@@ -333,23 +333,37 @@ program
       }
     }
 
-    if (data.vscode && data.vscode.openFiles) {
-      const { projectRoot, openFiles } = data.vscode;
+    // New capsules store one entry per VS Code window; legacy ones store a
+    // single object. Normalize to a list and reopen each window separately.
+    const vsWindows = (Array.isArray(data.vscode) ? data.vscode : (data.vscode ? [data.vscode] : []))
+      .filter(w => w && (w.projectRoot || w.activeFile || (Array.isArray(w.openFiles) && w.openFiles.length > 0)));
 
-      // Pass paths as spawn args (no shell) so a filename like `$(...)` can't be
-      // interpreted as a command during restore.
+    if (vsWindows.length > 0) {
+      // Launch the window that was focused at save time last, so it ends up on top.
+      vsWindows.sort((a, b) => (a.focused === true ? 1 : 0) - (b.focused === true ? 1 : 0));
+
       const codeBin = process.platform === 'win32' ? 'code.cmd' : 'code';
-      const args = ['-n'];
-      if (projectRoot) args.push(projectRoot);
-      if (Array.isArray(openFiles) && openFiles.length > 0) args.push(...openFiles);
+      for (const w of vsWindows) {
+        // Pass paths as spawn args (no shell) so a filename like `$(...)` can't be
+        // interpreted as a command during restore.
+        const args = ['-n'];
+        if (w.projectRoot) args.push(w.projectRoot);
+        // The active file can live outside openFiles (e.g. it was in a diff
+        // editor at save time) — make sure it reopens too.
+        const files = Array.isArray(w.openFiles) ? w.openFiles.slice() : [];
+        if (w.activeFile && !files.includes(w.activeFile)) files.push(w.activeFile);
+        if (files.length > 0) args.push(...files);
 
-      console.log(`Restoring Workspace: ${projectRoot || 'Files only'}`);
-      try {
-        const child = spawn(codeBin, args, { detached: true, stdio: 'ignore' });
-        child.on('error', (e) => console.error(`Failed to launch VS Code (is the 'code' command on your PATH?): ${e.message}`));
-        child.unref();
-      } catch (e) {
-        console.error(`Failed to launch VS Code: ${e.message}`);
+        console.log(`Restoring Workspace: ${w.projectRoot || 'Files only'}`);
+        try {
+          const child = spawn(codeBin, args, { detached: true, stdio: 'ignore' });
+          child.on('error', (e) => console.error(`Failed to launch VS Code (is the 'code' command on your PATH?): ${e.message}`));
+          child.unref();
+        } catch (e) {
+          console.error(`Failed to launch VS Code: ${e.message}`);
+        }
+        // Give VS Code time to claim each window before requesting the next.
+        await sleep(400);
       }
     }
   });
@@ -433,10 +447,17 @@ program
         : 'unknown';
       console.log(`\nCapsule: ${name}  (saved: ${saved})\n`);
 
-      const openFiles = data.vscode?.openFiles || [];
+      const vsWindows = Array.isArray(data.vscode) ? data.vscode : (data.vscode ? [data.vscode] : []);
       console.log('VS Code files:');
-      if (openFiles.length > 0) {
-        openFiles.forEach(f => console.log(`  ${f}`));
+      const withFiles = vsWindows.filter(w => w && Array.isArray(w.openFiles) && w.openFiles.length > 0);
+      if (withFiles.length > 0) {
+        withFiles.forEach((w, i) => {
+          if (withFiles.length > 1) {
+            const label = w.projectRoot ? path.basename(w.projectRoot) : `window ${i + 1}`;
+            console.log(`  [${label}${w.focused ? ', focused' : ''}]`);
+          }
+          w.openFiles.forEach(f => console.log(`  ${f}`));
+        });
       } else {
         console.log('  (none saved)');
       }

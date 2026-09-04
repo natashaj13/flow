@@ -111,7 +111,7 @@ async function handleSaveDirective(saveId) {
   if (saveId != null && (saveId === lastProcessedSaveId || saveId === processingSaveId)) return;
   processingSaveId = saveId;
   try {
-    const ok = await captureAndSubmit();
+    const ok = await captureAndSubmit(saveId);
     if (ok) lastProcessedSaveId = saveId;
   } finally {
     if (processingSaveId === saveId) processingSaveId = null;
@@ -138,7 +138,7 @@ async function getProfileInfo() {
   }
 }
 
-async function captureAndSubmit() {
+async function captureAndSubmit(saveId) {
   const profile = await getProfileInfo();
 
   // Capture every tab across every window, not just the focused one. When the
@@ -165,8 +165,11 @@ async function captureAndSubmit() {
     const res = await fetch(`${HUB_URL}/snapshot`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      // Tag with the directive's saveId so the hub can drop this capture if a
+      // newer `flow save` to a different capsule has superseded it mid-flight.
       body: JSON.stringify({
         type: 'browser',
+        saveId,
         data,
         profile
       })

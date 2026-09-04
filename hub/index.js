@@ -87,13 +87,21 @@ app.get('/check-save', (req, res) => {
 });
 
 app.post('/snapshot', (req, res) => {
-    const { type, data, profile } = req.body || {};
+    const { type, data, profile, saveId } = req.body || {};
 
     // Only accept the two known payload types — anything else would become a
     // stray capsule key (and 'type' is client-supplied).
     if (type !== 'browser' && type !== 'vscode') {
         console.error(`Rejected: unknown snapshot type "${type}".`);
         return res.status(400).send('Unknown snapshot type');
+    }
+
+    // A snapshot tagged with a superseded saveId belongs to an older directive
+    // (a new `flow save` landed mid-capture) — don't mix it into this capsule.
+    // Clients that don't send saveId are accepted as before.
+    if (saveId != null && lastSaveId != null && saveId !== lastSaveId) {
+        console.warn(`Rejected: stale saveId ${saveId} (current is ${lastSaveId}).`);
+        return res.status(409).send('Stale save directive');
     }
 
     if (!activeCapsule || activeCapsule === 'undefined') {
@@ -134,11 +142,27 @@ app.post('/snapshot', (req, res) => {
             capsule.browser = kept.concat(Array.isArray(data) ? data : []);
         }
     } else {
-        // Never let an empty capture clobber a previously-good snapshot.
-        if (Array.isArray(data) && data.length === 0 && capsule[type]) {
-            console.warn(`Empty ${type} capture ignored; keeping existing data.`);
+        // Every VS Code window reports separately, so store one entry per
+        // window, merged by windowId. A new save cycle (different saveId)
+        // starts a fresh list — otherwise windows closed since the last save
+        // would linger in the capsule forever.
+        const entry = (data && typeof data === 'object' && !Array.isArray(data)) ? data : null;
+        const hasContent = entry && (
+            (Array.isArray(entry.openFiles) && entry.openFiles.length > 0) ||
+            entry.activeFile || entry.projectRoot
+        );
+        if (!hasContent) {
+            console.warn('Empty vscode capture ignored; keeping existing data.');
         } else {
-            capsule[type] = data;
+            const cycleId = saveId != null ? saveId : lastSaveId;
+            const windowId = entry.windowId != null ? entry.windowId : 'unknown';
+            let windows = (capsule.vscodeSaveId === cycleId && Array.isArray(capsule.vscode))
+                ? capsule.vscode
+                : [];
+            windows = windows.filter(w => (w.windowId != null ? w.windowId : 'unknown') !== windowId);
+            windows.push({ ...entry, windowId });
+            capsule.vscode = windows;
+            capsule.vscodeSaveId = cycleId;
         }
     }
     capsule.name = activeCapsule;
@@ -157,10 +181,13 @@ app.post('/snapshot', (req, res) => {
         console.log(`[${type}] reported in.`);
     }
 
+    // Do NOT lower shouldSave here even when both types have reported: several
+    // VS Code windows share one poll cycle, and dropping the flag after the
+    // first one would make the others (polling up to 2s later) miss the save.
+    // Clients dedupe by saveId, so leaving the flag up until the grace timer
+    // expires can't cause double-saves.
     if (checklist.vscode && checklist.browser) {
-        console.log(`Both synced for ${activeCapsule}. Cycle complete.`);
-        shouldSave = false; // Lower the flag now that we are done
-        if (saveGraceTimer) { clearTimeout(saveGraceTimer); saveGraceTimer = null; }
+        console.log(`Both client types synced for ${activeCapsule}.`);
     }
     res.sendStatus(200);
 });

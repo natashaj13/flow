@@ -1,10 +1,15 @@
 {
-  "name": "vscode",
-  "displayName": "vscode",
-  "description": "",
+  "name": "flow-vscode",
+  "displayName": "Flow",
+  "description": "Saves the open files of every VS Code window into Flow capsules, restorable with `flow load`",
   "version": "0.0.1",
+  "publisher": "natashaj13",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/natashaj13/flow.git"
+  },
   "engines": {
-      "vscode": "^1.109.0"
+      "vscode": "^1.116.0"
   },
   "categories": [
     "Other"
